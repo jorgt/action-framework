@@ -1,0 +1,17 @@
+TAP version 14
+# Subtest: WebSocket
+    # Subtest: WebSocket `/ws` route with database event
+        1..0
+    ok 1 - WebSocket `/ws` route with database event # time=0.759ms
+    
+    1..1
+ok 1 - WebSocket # time=36.887ms
+
+[02:24:37 UTC] [32mINFO[39m (plugins/websocket): [36mregistering websocket[39m
+1..1
+[02:24:37 UTC] [32mINFO[39m (queue/start): [36mStarting queue with interval 100ms[39m
+[02:24:37 UTC] [32mINFO[39m (app): [36mEnvironment variables loaded[39m
+[02:24:37 UTC] [32mINFO[39m (index): [36mServer ready[39m
+[02:24:37 UTC] [32mINFO[39m (index): [36mWS is ready, adding listeners[39m
+[02:24:37 UTC] [32mINFO[39m (queue/start): [36mStopping queue[39m
+[02:24:37 UTC] [32mINFO[39m (queue/workerPlugin): [36mShutting down worker threads[39m

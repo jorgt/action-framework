@@ -1,0 +1,8 @@
+TAP version 14
+# Subtest: GET `/health` route
+    ok 1 - returns a status code of 200
+    ok 2 - returns the correct payload
+    1..2
+ok 1 - GET `/health` route # time=29.473ms
+
+1..1

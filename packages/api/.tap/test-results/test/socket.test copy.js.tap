@@ -1,0 +1,7 @@
+TAP version 14
+# Subtest: The app ping pongs on the websocket protocol
+    ok 1 - responds to PING with PONG
+    1..1
+ok 1 - The app ping pongs on the websocket protocol # time=12.625ms
+
+1..1

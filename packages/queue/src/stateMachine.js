@@ -4,9 +4,7 @@ import config from './config.js'
 import logger from './utils/logger.js'
 import db from './db.js'
 
-const LOCK_PREFIX = 'entity_lock:'
-
-class ActionStateMachine {
+class ActionProcessor {
     constructor() {
         this.connection = new IORedis({ maxRetriesPerRequest: null })
 
@@ -22,10 +20,12 @@ class ActionStateMachine {
                     type: 'exponential',
                     delay: 1000,
                 },
+                removeOnComplete: false,
+                removeOnFail: false
             }
         })
 
-        this.worker = new Worker('action-queue', this.processJob.bind(this), {
+        this.worker = new Worker('action-queue', this.processAction.bind(this), {
             connection: this.connection,
             concurrency: 10
         })
@@ -34,34 +34,12 @@ class ActionStateMachine {
     }
 
     setupListeners() {
-        this.worker.on('completed', async (job) => {
-            logger.info(`Job ${job.id} completed`, { jobId: job.id })
-            const { entityId, entityType, sequenceId } = job.data
-
-            try {
-                const sequence = await this.getSequence(sequenceId)
-                if (sequence?.status_on_sequence_success) {
-                    await this.updateEntityStatus(entityId, entityType, sequence.status_on_sequence_success)
-                }
-                await this.releaseLock(entityId, entityType)
-            } catch (error) {
-                logger.error('Error in job completion handler', { error: error.message, jobId: job.id })
-            }
+        this.worker.on('completed', job => {
+            logger.info(`Action completed`, { jobId: job.id })
         })
 
-        this.worker.on('failed', async (job, err) => {
-            logger.error(`Job ${job.id} failed`, { jobId: job.id, error: err.message })
-            const { entityId, entityType, sequenceId } = job.data
-
-            try {
-                const sequence = await this.getSequence(sequenceId)
-                if (sequence?.status_on_sequence_failure) {
-                    await this.updateEntityStatus(entityId, entityType, sequence.status_on_sequence_failure)
-                }
-                await this.releaseLock(entityId, entityType)
-            } catch (error) {
-                logger.error('Error in job failure handler', { error: error.message, jobId: job.id })
-            }
+        this.worker.on('failed', (job, error) => {
+            logger.error(`Action failed`, { jobId: job.id, error: error.message })
         })
 
         this.worker.on('error', error => {
@@ -75,236 +53,270 @@ class ActionStateMachine {
         await this.connection.quit()
     }
 
-    async acquireLock(entityId, entityType) {
-        const lockKey = `${LOCK_PREFIX}${String(entityType)}:${String(entityId)}`
-        const acquired = await this.connection.set(lockKey, '1', 'NX')
-        if (!acquired) {
-            throw new Error(`Entity is locked: ${entityType} ${entityId}`)
-        }
-    }
-
-    async releaseLock(entityId, entityType) {
-        const lockKey = `${LOCK_PREFIX}${String(entityType)}:${String(entityId)}`
-        await this.connection.del(lockKey)
-    }
-
-    async getSequence(sequenceId) {
-        try {
-            const sequence = await db('action_sequences')
-                .select([
-                    'id',
-                    'code',
-                    'description',
-                    'status_on_sequence_success',
-                    'status_on_sequence_failure'
-                ])
-                .where({ id: sequenceId })
-                .first()
-            
-            if (!sequence) {
-                throw new Error(`Sequence ${sequenceId} not found`)
-            }
-            
-            return sequence
-        } catch (error) {
-            logger.error('Failed to get sequence', { error: error.message, sequenceId })
-            throw error
-        }
-    }
-
-    async getAvailableSequences(entityId, entityType) {
-        try {
-            return await db.select('*')
-                .from('action_available_sequences')
-                .where({
-                    entity_id: entityId,
-                    entity_type: entityType
-                })
-        } catch (error) {
-            logger.error('Failed to get available sequences', { 
-                error: error.message, 
-                entityId,
-                entityType 
-            })
-            throw error
-        }
-    }
-
-    async getSequenceActions(sequenceId) {
+    async getNextAction(sequenceId, parentActionId) {
         try {
             return await db('action_sequence_actions as sa')
                 .select([
-                    'sa.id as sequence_action_id',
                     'a.id as action_id',
-                    'a.code',
-                    'a.type',
+                    'a.code as action_code',
+                    'a.type as action_type',
                     'a.config',
+                    'a.userAction',
+                    'a.description as action_description',
                     'sa.parent_action_id'
                 ])
                 .innerJoin('action_actions as a', 'sa.action_id', 'a.id')
-                .where({ 'sa.sequence_id': sequenceId })
-                .orderBy('sa.id')
+                .where({ 
+                    'sa.sequence_id': sequenceId,
+                    'sa.parent_action_id': parentActionId
+                })
         } catch (error) {
-            logger.error('Failed to get sequence actions', { error: error.message, sequenceId })
+            logger.error('Error getting next action', { error: error.message })
             throw error
         }
     }
 
-    async updateEntityStatus(entityId, entityType, statusUuid) {
+    async getRootActions(sequenceId) {
         try {
-            // First get the status code from the status UUID
-            const status = await db('action_statuses')
-                .select('code')
-                .where({ id: statusUuid })
-                .first()
+            return await db('action_sequence_actions as sa')
+                .select([
+                    'a.id as action_id',
+                    'a.code as action_code',
+                    'a.type as action_type',
+                    'a.config',
+                    'a.userAction',
+                    'a.description as action_description',
+                    'sa.parent_action_id'
+                ])
+                .innerJoin('action_actions as a', 'sa.action_id', 'a.id')
+                .where({ 
+                    'sa.sequence_id': sequenceId,
+                    'sa.parent_action_id': null 
+                })
+        } catch (error) {
+            logger.error('Error getting root actions', { error: error.message })
+            throw error
+        }
+    }
 
-            if (!status) {
-                throw new Error(`Status not found for UUID: ${statusUuid}`)
+    async updateEntityStatus(entityId, sequenceId, success) {
+        try {
+            const query = db('action_entity_status as es')
+                .join('action_sequences as seq', 'seq.id', '=', sequenceId)
+                .join(
+                    'action_statuses as s',
+                    's.id',
+                    '=',
+                    success ? 'seq.status_on_sequence_success' : 'seq.status_on_sequence_failure'
+                )
+                .where('es.entity_id', entityId)
+                .update({
+                    'es.status_code': db.raw('s.code'),
+                    'es.updated_at': db.fn.now()
+                })
+
+            await query
+        } catch (error) {
+            logger.error('Error updating entity status', { error: error.message })
+            throw error
+        }
+    }
+
+    async queueAction(actionJob) {
+        return this.queue.add('execute-action', actionJob, {
+            attempts: 3,
+            backoff: {
+                type: 'exponential',
+                delay: 1000
+            },
+            removeOnComplete: false,
+            removeOnFail: false
+        })
+    }
+
+    async processAction(job) {
+        const { actionData, entityId, entityType, sequenceId } = job.data
+        
+        logger.info(`Processing action`, { 
+            actionId: actionData.action_id,
+            type: actionData.action_type,
+            code: actionData.action_code 
+        })
+
+        try {
+            const config = typeof actionData.config === 'string' 
+                ? JSON.parse(actionData.config) 
+                : actionData.config
+
+            // Execute current action
+            switch (actionData.action_type) {
+                case 'STATUS':
+                    await this.executeStatusAction(actionData, config, job.data)
+                    break
+                case 'CODE':
+                    await this.executeCodeAction(actionData, config, job.data)
+                    break
+                case 'CHECK':
+                    await this.executeCheckAction(actionData, config, job.data)
+                    break
+                case 'CALL':
+                    await this.executeCallAction(actionData, config, job.data)
+                    break
+                default:
+                    throw new Error(`Unknown action type: ${actionData.action_type}`)
             }
 
-            // Then update the entity status
+            // Get next action(s) in sequence
+            const nextActions = await this.getNextAction(sequenceId, actionData.action_id)
+            
+            if (nextActions?.length > 0) {
+                // Queue next actions
+                for (const nextAction of nextActions) {
+                    await this.queueAction({
+                        entityId,
+                        entityType,
+                        sequenceId,
+                        actionId: nextAction.action_id,
+                        actionData: nextAction
+                    })
+                }
+                return { success: true, hasNext: true }
+            } else {
+                // No more actions, sequence completed successfully
+                await this.updateEntityStatus(entityId, sequenceId, true)
+                // Look for next sequences based on new status
+                await this.queueNextAvailableSequences(entityId, entityType)
+                return { success: true, hasNext: false }
+            }
+
+        } catch (error) {
+            logger.error(`Error processing action`, { 
+                error: error.message,
+                actionId: actionData.action_id 
+            })
+            // Mark sequence as failed and update status
+            await this.updateEntityStatus(entityId, sequenceId, false)
+            throw error
+        }
+    }
+
+    async executeStatusAction(action, config, jobData) {
+        const { entityId, entityType } = jobData
+        logger.info('Executing status action', { action, config })
+
+        try {
+            if (!config.status_id) {
+                throw new Error('Status ID not specified in action config')
+            }
+
+            // Get status code from status_id
+            const newStatus = await db('action_statuses')
+                .where('id', config.status_id)
+                .first()
+
+            if (!newStatus) {
+                throw new Error(`Invalid status_id in config: ${config.status_id}`)
+            }
+
+            // Update status
             await db('action_entity_status')
                 .where({ 
                     entity_id: entityId,
                     entity_type: entityType 
                 })
                 .update({
-                    status_code: status.code,
+                    status_code: newStatus.code,
                     updated_at: db.fn.now()
                 })
+
+            await this.logActionResult(action, jobData, {
+                newStatus: newStatus.code,
+                success: true
+            })
+
+            return true
         } catch (error) {
-            logger.error('Failed to update entity status', {
+            await this.logActionResult(action, jobData, {
                 error: error.message,
-                entityId,
-                entityType,
-                statusUuid
+                success: false
             })
             throw error
         }
     }
 
-    async processJob(job) {
-        const { id, data } = job
-        const { entityId, entityType, sequenceId } = data
+    async executeCodeAction(action, config, jobData) {
+        logger.info('Executing code action', { action, config })
+        // Implementation needed
+        return true
+    }
 
-        logger.info(`Processing job ${id}`, { entityId, entityType, sequenceId })
+    async executeCheckAction(action, config, jobData) {
+        logger.info('Executing check action', { action, config })
+        // Implementation needed
+        return true
+    }
 
+    async executeCallAction(action, config, jobData) {
+        logger.info('Executing call action', { action, config })
+        // Implementation needed
+        return true
+    }
+
+    async logActionResult(action, jobData, result) {
+        const { entityId, entityType } = jobData
+        
         try {
-            // Get sequence actions
-            const actions = await this.getSequenceActions(sequenceId)
-            if (!actions.length) {
-                throw new Error(`No actions found for sequence ${sequenceId}`)
-            }
-
-            // Execute actions in order
-            for (const action of actions) {
-                await this.executeAction(action, data)
-            }
-
-            return { success: true }
+            await db('action_log').insert({
+                entity_id: entityId,
+                entity_type: entityType,
+                action_id: action.action_id,
+                payload: JSON.stringify(action.config || {}),
+                result: JSON.stringify(result)
+            })
         } catch (error) {
-            logger.error(`Error processing job ${id}`, { error: error.message })
+            logger.error('Failed to log action result', {
+                error: error.message,
+                action,
+                result
+            })
+        }
+    }
+
+    async queueNextAvailableSequences(entityId, entityType) {
+        try {
+            const availableSequences = await db.select('*')
+                .from('action_available_sequences')
+                .where({
+                    entity_id: entityId,
+                    entity_type: entityType
+                })
+            
+            for (const sequence of availableSequences) {
+                const rootActions = await this.getRootActions(sequence.sequence_id)
+                for (const action of rootActions) {
+                    await this.queueAction({
+                        entityId,
+                        entityType,
+                        sequenceId: sequence.sequence_id,
+                        actionId: action.action_id,
+                        actionData: action
+                    })
+                }
+            }
+        } catch (error) {
+            logger.error('Error queuing next sequences', { error: error.message })
             throw error
         }
     }
 
-    async executeAction(action, jobData) {
-        logger.info(`Executing action`, { 
-            actionId: action.action_id, 
-            type: action.type,
-            code: action.code 
-        })
-
-        const config = typeof action.config === 'string' 
-            ? JSON.parse(action.config) 
-            : action.config
-
-        switch (action.type) {
-            case 'STATUS':
-                await this.executeStatusAction(action, config, jobData)
-                break
-            case 'CODE':
-                await this.executeCodeAction(action, config, jobData)
-                break
-            case 'CHECK':
-                await this.executeCheckAction(action, config, jobData)
-                break
-            case 'CALL':
-                await this.executeCallAction(action, config, jobData)
-                break
-            default:
-                throw new Error(`Unknown action type: ${action.type}`)
+    async startProcessing(entityId, entityType) {
+        try {
+            await this.queueNextAvailableSequences(entityId, entityType)
+        } catch (error) {
+            logger.error('Error starting processing', { error: error.message })
+            throw error
         }
-    }
-
-    async executeStatusAction(action, config, jobData) {
-        const { entityId, entityType } = jobData
-        
-        if (!config.status_id) {
-            throw new Error('Status ID not specified in action config')
-        }
-
-        await this.updateEntityStatus(entityId, entityType, config.status_id)
-    }
-
-    async executeCodeAction(action, config, jobData) {
-        logger.info('Executing code action', { config })
-        // Execute based on config
-    }
-
-    async executeCheckAction(action, config, jobData) {
-        logger.info('Executing check action', { config })
-        // Execute based on config
-    }
-
-    async executeCallAction(action, config, jobData) {
-        logger.info('Executing call action', { config })
-        // Execute based on config
-    }
-
-    async executeSequence(entityId, entityType, sequenceId) {
-        // Input validation
-        if (!entityId || !entityType || !sequenceId) {
-            throw new Error('Missing required parameters: entityId, entityType, and sequenceId are required')
-        }
-
-        // Acquire lock
-        await this.acquireLock(entityId, entityType)
-
-        // Validate sequence exists
-        const sequence = await this.getSequence(sequenceId)
-        if (!sequence) {
-            throw new Error(`Invalid sequence ID: ${sequenceId}`)
-        }
-
-        // Add to queue
-        return this.queue.add(
-            'execute-sequence',
-            {
-                entityId,
-                entityType,
-                sequenceId,
-                startedAt: new Date().toISOString()
-            },
-            {
-                attempts: 5,
-                backoff: {
-                    type: 'exponential',
-                    delay: 60000,
-                },
-                removeOnComplete: false,
-                removeOnFail: false,
-            }
-        )
-    }
-
-    async getJobStatus(jobId) {
-        const job = await this.queue.getJob(jobId)
-        if (!job) {
-            throw new Error('Job not found')
-        }
-        return job
     }
 }
 
-export default ActionStateMachine
+export default ActionProcessor
