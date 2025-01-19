@@ -1,0 +1,49 @@
+services:
+  postgres:
+    build:
+      context: ./docker/postgres
+      dockerfile: Dockerfile
+    container_name: better-warranty-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-warranty}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-warranty}
+      POSTGRES_DB: ${POSTGRES_DB:-warranty}
+    ports:
+      - '15432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U warranty']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres
+        -c max_connections=100
+        -c shared_buffers=2GB
+        -c effective_cache_size=6GB
+        -c maintenance_work_mem=512MB
+        -c random_page_cost=1.1
+        -c work_mem=16MB
+        -c min_wal_size=2GB
+        -c max_wal_size=8GB
+        -c wal_buffers=16MB
+        -c default_statistics_target=100
+
+  redis:
+    image: redis:7-alpine
+    container_name: better-warranty-redis
+    ports:
+      - '16379:6379'
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:

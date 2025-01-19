@@ -1,0 +1,191 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Raleway:ital,wght@0,100..900;1,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fira+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Inter:wght@100..900&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Raleway:ital,wght@0,100..900;1,100..900&family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root {
+  --survely-font-sans: 'Ubuntu', -apple-system, system-ui, BlinkMacSystemFont, sans-serif;
+
+  --header-height: 80px;
+  --footer-height: 277px;
+  --footer-content-height: 257px;
+  --min-main-height: calc(100vh - var(--footer-height) - var(--header-height));
+  --vh100-offset: calc(100vh - var(--header-height));
+
+  --font-family-base: 'Ubuntu', sans-serif;
+  --from: var(--accents-50);
+  --to: var(--accents-400);
+}
+/* light theme */
+html,
+*[data-theme='light'] {
+  --hover: rgba(255, 255, 255, 0.075);
+  --hover-1: rgba(255, 255, 255, 0.15);
+  --hover-2: rgba(255, 255, 255, 0.25);
+  --selection: var(--main);
+
+  --accents-50: hsl(0, 0%, 98%);
+  --accents-100: hsl(0, 0%, 96%);
+  --accents-200: hsl(0, 1%, 90%);
+  --accents-300: hsl(0, 1%, 87%);
+  --accents-400: hsl(0, 1%, 73%);
+  --accents-500: hsl(0, 1%, 57%);
+  --accents-600: hsl(0, 1%, 47%);
+  --accents-700: hsl(0, 1%, 37%);
+  --accents-800: hsl(0, 1%, 29%);
+  --accents-900: hsl(0, 1%, 25%);
+  --accents-950: hsl(0, 1%, 19%);
+
+  --main-50: #f2f8fa;
+  --main-100: #e6f3f7;
+  --main-200: #c3e0eb;
+  --main-300: #a0cbde;
+  --main-400: #65a3c7;
+  --main-500: #3479ad;
+  --main-600: #2a679c;
+  --main-700: #1d4f82;
+  --main-800: #133969;
+  --main-900: #0a274f;
+  --main-950: #051633;
+
+  --contrast: #ff7f00;
+  --contrast-highlight: #cc6600;
+
+  --green: #79af2d;
+  --green-highlight: #4f8903;
+  --red: #da3c3c;
+  --red-highlight: #5e1919;
+}
+
+*[data-theme='dark'] {
+  /* --black: rgba(255, 255, 255, var(--tw-bg-opacity, 1)); */
+
+  /* --white: rgba(18, 18, 18, var(--tw-bg-opacity, 1)); */
+  --hover: rgba(255, 255, 255, 0.075);
+  --hover-1: rgba(255, 255, 255, 0.15);
+  --hover-2: rgba(255, 255, 255, 0.25);
+  --selection: var(--main-400);
+
+  --accents-50: hsl(0, 0%, 7%);
+  --accents-100: hsl(0, 0%, 11%);
+  --accents-200: hsl(0, 1%, 16%);
+  --accents-300: hsl(0, 1%, 21%);
+  --accents-400: hsl(0, 1%, 30%);
+  --accents-500: hsl(0, 1%, 42%);
+  --accents-600: hsl(0, 1%, 53%);
+  --accents-700: hsl(0, 1%, 68%);
+  --accents-800: hsl(0, 1%, 78%);
+  --accents-900: hsl(0, 1%, 88%);
+  --accents-950: hsl(0, 1%, 95%);
+  --main-50: #edf7fa;
+  --main-100: #daebf2;
+  --main-200: #aad1e3;
+  --main-300: #7db2d1;
+  --main-400: #3479ad;
+  --main-500: #004389;
+  --main-600: #003a7d;
+  --main-700: #002a66;
+  --main-800: #001f52;
+  --main-900: #00153d;
+  --main-950: #000d29;
+
+  --contrast: #cc6600;
+  --contrast-highlight: #ff7f00;
+}
+
+html {
+  scroll-behavior: smooth;
+  background-color: var(--accents-50) !important;
+}
+
+/* .main {
+  @apply mx-auto w-full min-h-screen h-full;
+} */
+
+/* *[data-theme='dark'] .bg-accents-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(20 20 20 / var(--tw-bg-opacity));
+}
+
+*[data-theme='dark'] .bg-black {
+  --tw-bg-opacity: 1;
+  background-color: rgb(255 255 255 / var(--tw-bg-opacity));
+}
+
+*[data-theme='dark'] .shadow-sm {
+  --tw-shadow: 0 1px 2px 0 rgba(255, 255, 255, 0.05);
+} */
+
+input[type='radio'] {
+  @apply h-4 w-4 border-accents-300 text-main-400 focus:ring-main-400;
+}
+
+*,
+*:before,
+*:after {
+  box-sizing: inherit;
+}
+
+*:focus {
+  outline: none;
+}
+
+html {
+  height: 100%;
+  box-sizing: border-box;
+  touch-action: manipulation;
+  font-feature-settings:
+    'case' 1,
+    'rlig' 1,
+    'calt' 0;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* .background {
+  background-color: var(--accents-50);
+  color: var(--text-base);
+} */
+
+html,
+body {
+  font-family: var(--survely-font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* @apply background; */
+  background-color: var(--accents-50);
+  color: var(--accents-900);
+}
+
+body {
+  position: relative;
+  min-height: 100%;
+  margin: 0;
+  overflow-x: hidden;
+}
+
+body,
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accents-100) var(--accents-200);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--accents-200);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--accents-100);
+  border-radius: 20px;
+  border: 3px solid var(--accents-200);
+}
+
+.chart svg {
+  width: calc(100% - 10px);
+}

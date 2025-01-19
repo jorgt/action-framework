@@ -1,0 +1,45 @@
+# Vendor directories
+vendor/
+**/vendor/
+packages/*/vendor/
+packages/web/vendor/
+packages/web/vendor/**/*
+
+# Node modules
+node_modules/
+**/node_modules/
+packages/*/node_modules/
+
+# Public and storage
+public/
+**/public/
+storage/
+**/storage/
+packages/*/public/build/
+packages/*/storage/
+
+# Build directories
+dist/
+**/dist/
+build/
+**/build/
+
+# Binary files
+*.{png,jpg,jpeg,gif,webp,woff,woff2,ttf,eot,ico,phar}
+
+# Explicit vendor paths
+vendor
+**/vendor
+**/vendor/**
+packages/*/vendor
+packages/*/vendor/**
+packages/web/vendor
+packages/web/vendor/**
+
+# Laravel specific
+bootstrap/cache/
+*.cache
+
+# Git
+.git/
+**/.git/
