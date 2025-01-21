@@ -4,48 +4,88 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use Illuminate\Auth\Events\Registered;
-use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules;
 use Inertia\Inertia;
-use Inertia\Response;
 
 class RegisteredUserController extends Controller
 {
-    /**
-     * Display the registration view.
-     */
-    public function create(): Response
-    {
-        return Inertia::render('Auth/Register');
+  public function create()
+  {
+    try {
+      Log::info('Registration page accessed', [
+        'tenant_id' => tenant()->id,
+        'ip' => request()->ip(),
+        'user_agent' => request()->userAgent(),
+      ]);
+
+      return Inertia::render('tenant/auth/register');
+    } catch (\Exception $e) {
+      Log::error('Failed to show registration page', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'tenant_id' => tenant()->id,
+        'ip' => request()->ip(),
+      ]);
+      throw $e;
     }
+  }
 
-    /**
-     * Handle an incoming registration request.
-     *
-     * @throws \Illuminate\Validation\ValidationException
-     */
-    public function store(Request $request): RedirectResponse
-    {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
-        ]);
+  public function store(Request $request)
+  {
+    try {
+      $start = microtime(true);
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-        ]);
+      Log::info('User registration initiated', [
+        'email' => $request->email,
+        'tenant_id' => tenant()->id,
+        'ip' => $request->ip(),
+        'user_agent' => $request->userAgent(),
+      ]);
 
-        event(new Registered($user));
+      $validated = $request->validate([
+        'name' => 'required|string|max:255',
+        'email' => 'required|string|email|max:255|unique:users',
+        'password' => ['required', 'confirmed', Rules\Password::defaults()],
+      ]);
 
-        Auth::login($user);
+      $user = User::create([
+        'name' => $validated['name'],
+        'email' => $validated['email'],
+        'password' => Hash::make($validated['password']),
+      ]);
 
-        return redirect(route('dashboard', absolute: false));
+      auth()->login($user);
+
+      Log::info('User registration successful', [
+        'user_id' => $user->id,
+        'email' => $user->email,
+        'duration_ms' => (microtime(true) - $start) * 1000,
+        'tenant_id' => tenant()->id,
+        'ip' => $request->ip(),
+      ]);
+
+      return redirect()->route('home')->with('message', 'Registration successful.');
+    } catch (ValidationException $e) {
+      Log::warning('User registration validation failed', [
+        'email' => $request->email ?? null,
+        'errors' => $e->errors(),
+        'tenant_id' => tenant()->id,
+        'ip' => $request->ip(),
+      ]);
+      throw $e;
+    } catch (\Exception $e) {
+      Log::error('User registration failed', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'email' => $request->email ?? null,
+        'tenant_id' => tenant()->id,
+        'ip' => $request->ip(),
+      ]);
+      throw $e;
     }
+  }
 }

@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Tenant\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Tenant\Api\EntityRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 
 class EntityController extends Controller
 {
@@ -16,28 +16,13 @@ class EntityController extends Controller
   public function show(string $id): JsonResponse
   {
     $entity = DB::select("
-      WITH entity_sequences AS (
-        SELECT 
-          s.id as sequence_id,
-          s.code as sequence_code,
-          s.description as sequence_description,
-          ss.code as status_on_sequence_success_code,
-          fs.code as status_on_sequence_failure_code
-        FROM action_sequences s
-        JOIN action_matrix_sequences ms ON ms.sequence_id = s.id
-        JOIN action_entity_matrix em ON em.action_matrix_id = ms.action_matrix_id
-        JOIN action_entity_status es ON es.entity_id = ?
-        JOIN action_statuses ss ON s.status_on_sequence_success = ss.id
-        JOIN action_statuses fs ON s.status_on_sequence_failure = fs.id
-        WHERE em.entity_type = es.entity_type
-        AND ms.status_id = (SELECT id FROM action_statuses WHERE code = es.status_code)
-      )
       SELECT 
         e.id,
         e.name,
         e.created_at,
         e.updated_at,
-        es.status_code,
+        s.status_code,
+        es.status_id,
         es.entity_type,
         COALESCE(
           (SELECT true FROM action_log WHERE entity_id = e.id AND result->>'status' = 'IN PROCESS' LIMIT 1),
@@ -47,22 +32,22 @@ class EntityController extends Controller
         COALESCE(
           json_agg(
             json_build_object(
-              'sequence_id', seq.sequence_id,
-              'sequence_code', seq.sequence_code,
-              'sequence_description', seq.sequence_description,
-              'status_on_sequence_success_code', seq.status_on_sequence_success_code,
-              'status_on_sequence_failure_code', seq.status_on_sequence_failure_code
+              'sequence_id', aseq.sequence_id,
+              'sequence_code', aseq.sequence_code,
+              'sequence_description', aseq.sequence_description,
+              'status_on_sequence_success_code', aseq.status_on_sequence_success_code,
+              'status_on_sequence_failure_code', aseq.status_on_sequence_failure_code
             )
-          ) FILTER (WHERE seq.sequence_id IS NOT NULL),
+          ) FILTER (WHERE aseq.sequence_id IS NOT NULL),
           '[]'::json
         ) as sequences
       FROM entities e
       JOIN action_entity_status es ON es.entity_id = e.id
       JOIN action_statuses s ON s.code = es.status_code
-      LEFT JOIN entity_sequences seq ON true
+      LEFT JOIN action_available_sequences aseq ON aseq.entity_id = e.id
       WHERE e.id = ?
-      GROUP BY e.id, e.name, e.created_at, e.updated_at, es.status_code, es.entity_type, s.description
-    ", [$id, $id]);
+      GROUP BY e.id, e.name, e.created_at, e.updated_at, s.status_code, es.status_code, es.entity_type, s.description
+    ", [$id]);
 
     if (empty($entity)) {
       return response()->json([
@@ -83,27 +68,6 @@ class EntityController extends Controller
   public function index(): JsonResponse
   {
     $entities = DB::select("
-      WITH entity_sequences AS (
-        SELECT 
-          es.entity_id,
-          json_agg(
-            json_build_object(
-              'sequence_id', s.id,
-              'sequence_code', s.code,
-              'sequence_description', s.description,
-              'status_on_sequence_success_code', ss.code,
-              'status_on_sequence_failure_code', fs.code
-            )
-          ) as sequences
-        FROM action_entity_status es
-        JOIN action_entity_matrix em ON em.entity_type = es.entity_type
-        JOIN action_matrix_sequences ms ON ms.action_matrix_id = em.action_matrix_id
-        JOIN action_sequences s ON s.id = ms.sequence_id
-        JOIN action_statuses ss ON s.status_on_sequence_success = ss.id
-        JOIN action_statuses fs ON s.status_on_sequence_failure = fs.id
-        WHERE ms.status_id = (SELECT id FROM action_statuses WHERE code = es.status_code)
-        GROUP BY es.entity_id
-      )
       SELECT 
         e.id,
         e.name,
@@ -116,11 +80,23 @@ class EntityController extends Controller
           false
         ) as locked,
         s.description as status_description,
-        COALESCE(seq.sequences, '[]'::json) as sequences
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'sequence_id', aseq.sequence_id,
+              'sequence_code', aseq.sequence_code,
+              'sequence_description', aseq.sequence_description,
+              'status_on_sequence_success_code', aseq.status_on_sequence_success_code,
+              'status_on_sequence_failure_code', aseq.status_on_sequence_failure_code
+            )
+          ) FILTER (WHERE aseq.sequence_id IS NOT NULL),
+          '[]'::json
+        ) as sequences
       FROM entities e
       JOIN action_entity_status es ON es.entity_id = e.id
       JOIN action_statuses s ON s.code = es.status_code
-      LEFT JOIN entity_sequences seq ON seq.entity_id = e.id
+      LEFT JOIN action_available_sequences aseq ON aseq.entity_id = e.id
+      GROUP BY e.id, e.name, e.created_at, e.updated_at, es.status_code, es.entity_type, s.description
       ORDER BY e.created_at DESC
     ");
 
@@ -133,7 +109,7 @@ class EntityController extends Controller
   /**
    * Execute a sequence on an entity
    */
-  public function executeSequence(Request $request, string $id): JsonResponse
+  public function executeSequence(Request $request, string $id)
   {
     $request->validate([
       'sequence_code' => 'required|string|size:4'
@@ -141,50 +117,50 @@ class EntityController extends Controller
 
     try {
       $entity = DB::selectOne("
-        SELECT e.*, es.entity_type, es.status_code
-        FROM entities e
-        JOIN action_entity_status es ON es.entity_id = e.id
-        WHERE e.id = ?
-      ", [$id]);
+            SELECT e.*, es.entity_type, es.action_id
+            FROM entities e
+            JOIN action_entity_status es ON es.entity_id = e.id
+            WHERE e.id = ?
+        ", [$id]);
+
+      \Log::info('Entity: ' . json_encode($entity));
 
       if (!$entity) {
-        return response()->json([
-          'success' => false,
-          'error' => 'Entity not found'
-        ], 404);
+        return back()->with('error', 'Entity not found');
       }
 
-      // Get sequence details
-      $sequence = DB::selectOne("
-        SELECT s.*, m.id as matrix_id, m.code as matrix_code
-        FROM action_sequences s
-        JOIN action_matrix_sequences ms ON ms.sequence_id = s.id
-        JOIN action_matrixes m ON m.id = ms.action_matrix_id
-        JOIN action_entity_matrix em ON em.action_matrix_id = m.id
-        WHERE s.code = ?
-        AND em.entity_type = ?
-        AND ms.status_id = (SELECT id FROM action_statuses WHERE code = ?)
-      ", [$request->sequence_code, $entity->entity_type, $entity->status_code]);
+      \Log::info('Entity: ' . json_encode($entity));
 
-      if (!$sequence) {
-        return response()->json([
-          'success' => false,
-          'error' => 'Invalid sequence for current entity state'
-        ], 400);
+      // Call the actions API to enqueue the job
+      $client = new \GuzzleHttp\Client();
+      try {
+        $response = $client->post(env('ACTIONS_API_URL') . '/enqueue', [
+          'headers' => [
+            'Content-Type' => 'application/json',
+            'x-api-key' => env('ACTIONS_API_KEY')
+          ],
+          'json' => [
+            'entity_id' => $id,
+            'entity_type' => $entity->entity_type,
+            'sequence_code' => $request->input('sequence_code'),
+            'tenant_id' => tenant()->id,
+          ]
+        ]);
+
+        if ($response->getStatusCode() === 200) {
+          return back()->with('success', 'Sequence execution started');
+        } else {
+          return back()->with('error', 'Failed to enqueue job');
+        }
+      } catch (\GuzzleHttp\Exception\ClientException $e) {
+        if ($e->getResponse()->getStatusCode() === 409) {
+          return back()->with('error', 'Entity already has a pending sequence execution');
+        }
+        throw $e;
       }
-
-      // Here we would dispatch a job to handle the sequence execution
-      // For now we'll just return success
-
-      return response()->json([
-        'success' => true,
-        'data' => []
-      ]);
     } catch (\Exception $e) {
-      return response()->json([
-        'success' => false,
-        'error' => 'Internal Server Error'
-      ], 500);
+      \Log::error($e->getMessage());
+      return back()->with('error', 'Internal Server Error');
     }
   }
 }

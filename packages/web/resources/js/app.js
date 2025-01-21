@@ -1,27 +1,24 @@
-import '../css/app.css'
 import './bootstrap'
-
-import { createInertiaApp } from '@inertiajs/svelte'
-import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers'
 import { router } from '@inertiajs/svelte'
-import { ZiggyVue } from '../../vendor/tightenco/ziggy'
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel'
+// Set up global defaults before createInertiaApp
+router.on('before', (event) => {
+  try {
+    event.detail.options.preserveState = true
 
-createInertiaApp({
-  title: (title) => `${title} - ${appName}`,
-  resolve: (name) => {
-    const pages = import.meta.glob('./Pages/**/*.svelte', { eager: true })
-    const page = pages[`./Pages/${name}.svelte`]
-    return page
-  },
-  setup({ el, App, props, plugin }) {
-    return createApp({ render: () => h(App, props) })
-      .use(plugin)
-      .use(ZiggyVue)
-      .mount(el)
-  },
-  progress: {
-    color: '#4B5563',
-  },
+    // If only wasn't set, initialize it
+    if (!event.detail.options.only) {
+      event.detail.options.only = []
+    }
+
+    // Always exclude auth from the request
+    if (!event.detail.options.only.includes('auth')) {
+      event.detail.options.only = [
+        ...event.detail.options.only,
+        ...Object.keys(window.Inertia.page.props).filter((key) => key !== 'auth'),
+      ]
+    }
+  } catch (e) {
+    //
+  }
 })

@@ -3,28 +3,33 @@
   "type": "module",
   "scripts": {
     "build": "vite build && vite build --ssr",
-    "dev": "vite"
+    "dev": "vite --port 5175",
+    "format": "npx prettier --write \"**/*.{php,blade.php,js,jsx,ts,tsx,css,scss,html,svelte}\"",
+    "clear": "php artisan config:clear && php artisan view:clear && php artisan route:clear && php artisan cache:clear"
   },
   "devDependencies": {
     "@inertiajs/svelte": "^2.0.2",
-    "@inertiajs/vue3": "^2.0.0",
     "@tailwindcss/forms": "^0.5.10",
-    "@vitejs/plugin-vue": "^5.0.0",
-    "@vue/server-renderer": "^3.4.0",
-    "autoprefixer": "^10.4.12",
-    "axios": "^1.7.4",
-    "concurrently": "^9.0.1",
-    "laravel-vite-plugin": "^1.0",
-    "postcss": "^8.4.31",
-    "tailwindcss": "^3.2.1",
-    "vite": "^6.0",
-    "vue": "^3.4.0"
+    "@vitejs/plugin-vue": "^5.2.1",
+    "autoprefixer": "^10.4.20",
+    "axios": "^1.7.9",
+    "concurrently": "^9.1.2",
+    "laravel-vite-plugin": "^1.1",
+    "lucide-svelte": "^0.462.0",
+    "postcss": "^8.5.1",
+    "prettier-plugin-blade": "^2.1.19",
+    "prettier-plugin-svelte": "^3.3.2",
+    "prettier-plugin-tailwindcss": "^0.6.9",
+    "tailwindcss": "^3.4.17",
+    "vite": "^6.0"
   },
   "dependencies": {
+    "@inertiajs/inertia": "^0.11.1",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "@tailwindcss/typography": "^0.5.16",
     "prettier-plugin-organize-imports": "^4.1.0",
     "prettier-plugin-tailwindcss": "^0.6.10",
+    "simplex-noise": "^4.0.3",
     "svelte": "^5.19.0"
   }
 }

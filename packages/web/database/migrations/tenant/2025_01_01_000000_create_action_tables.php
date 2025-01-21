@@ -123,13 +123,13 @@ return new class extends Migration {
       $table->uuid('id')->primary()->default(DB::raw('uuid_generate_v4()'));
       $table->uuid('entity_id');
       $table->string('entity_type', 10);
-      $table->string('status_code', 4);
+      $table->uuid('action_id');
       $table->timestamps();
 
       $table->unique(['entity_id', 'entity_type']);
 
-      $table->foreign('status_code')
-        ->references('code')
+      $table->foreign('action_id')
+        ->references('id')
         ->on('action_statuses')
         ->onDelete('cascade');
     });

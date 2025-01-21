@@ -3,49 +3,77 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
-use Inertia\Response;
 
 class PasswordResetLinkController extends Controller
 {
-    /**
-     * Display the password reset link request view.
-     */
-    public function create(): Response
-    {
-        return Inertia::render('Auth/ForgotPassword', [
-            'status' => session('status'),
-        ]);
+  public function create()
+  {
+    try {
+      Log::info('Password reset request page accessed', [
+        'tenant_id' => tenant()->id,
+        'ip' => request()->ip(),
+      ]);
+
+      return Inertia::render('tenant/auth/password/request');
+    } catch (\Exception $e) {
+      Log::error('Failed to show password reset request page', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'tenant_id' => tenant()->id,
+        'ip' => request()->ip(),
+      ]);
+      throw $e;
     }
+  }
 
-    /**
-     * Handle an incoming password reset link request.
-     *
-     * @throws \Illuminate\Validation\ValidationException
-     */
-    public function store(Request $request): RedirectResponse
-    {
-        $request->validate([
-            'email' => 'required|email',
+  public function store(Request $request)
+  {
+    try {
+      $start = microtime(true);
+
+      Log::info('Password reset link requested', [
+        'email' => $request->email,
+        'tenant_id' => tenant()->id,
+        'ip' => $request->ip(),
+      ]);
+
+      $request->validate(['email' => 'required|email']);
+
+      $status = Password::sendResetLink($request->only('email'));
+
+      if ($status == Password::RESET_LINK_SENT) {
+        Log::info('Password reset link sent successfully', [
+          'email' => $request->email,
+          'status' => $status,
+          'duration_ms' => (microtime(true) - $start) * 1000,
+          'tenant_id' => tenant()->id,
         ]);
 
-        // We will send the password reset link to this user. Once we have attempted
-        // to send the link, we will examine the response then see the message we
-        // need to show to the user. Finally, we'll send out a proper response.
-        $status = Password::sendResetLink(
-            $request->only('email')
-        );
+        return back()->with('message', __($status));
+      }
 
-        if ($status == Password::RESET_LINK_SENT) {
-            return back()->with('status', __($status));
-        }
+      Log::warning('Password reset link not sent', [
+        'email' => $request->email,
+        'status' => $status,
+        'duration_ms' => (microtime(true) - $start) * 1000,
+        'tenant_id' => tenant()->id,
+        'ip' => $request->ip(),
+      ]);
 
-        throw ValidationException::withMessages([
-            'email' => [trans($status)],
-        ]);
+      return back()->withErrors(['email' => __($status)]);
+    } catch (\Exception $e) {
+      Log::error('Failed to process password reset link request', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'email' => $request->email ?? null,
+        'tenant_id' => tenant()->id,
+        'ip' => $request->ip(),
+      ]);
+      throw $e;
     }
+  }
 }

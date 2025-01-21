@@ -11,7 +11,7 @@ return new class extends Migration {
       CREATE OR REPLACE VIEW action_available_sequences AS
       SELECT 
         e.entity_id,
-        e.status_code as current_status_code,
+        s.code as current_status_code,
         s.description as current_status_description,
         eam.action_matrix_id,
         am.code as action_matrix_code,
@@ -26,7 +26,7 @@ return new class extends Migration {
         fa.code as status_on_sequence_failure_code,
         fa.description as status_on_sequence_failure_description
       FROM action_entity_status e
-      INNER JOIN action_statuses s ON e.status_code = s.code
+      INNER JOIN action_statuses s ON e.action_id = s.id
       INNER JOIN action_entity_matrix eam ON e.entity_type = eam.entity_type
       INNER JOIN action_matrixes am ON eam.action_matrix_id = am.id
       INNER JOIN action_matrix_sequences ams ON am.id = ams.action_matrix_id

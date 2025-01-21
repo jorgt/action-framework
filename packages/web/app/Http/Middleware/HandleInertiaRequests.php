@@ -9,20 +9,20 @@ use Tighten\Ziggy\Ziggy;
 class HandleInertiaRequests extends Middleware
 {
 
-  /**
-   * The root template that is loaded on the first page visit.
-   *
-   * @var string
-   */
-  protected $rootView = 'app';
+    /**
+     * The root template that is loaded on the first page visit.
+     *
+     * @var string
+     */
+    protected $rootView = 'app';
 
-  /**
-   * Determine the root view based on the request.
-   */
-  public function rootView(Request $request): string
-  {
-    return 'layouts.central';
-  }
+    /**
+     * Determine the root view based on the request.
+     */
+    public function rootView(Request $request): string
+    {
+        return 'layouts.central';
+    }
 
     /**
      * Determine the current asset version.
@@ -43,8 +43,9 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'auth' => [
                 'user' => $request->user(),
+                'tenant' => tenant()
             ],
-            'ziggy' => fn () => [
+            'ziggy' => fn() => [
                 ...(new Ziggy)->toArray(),
                 'location' => $request->url(),
             ],

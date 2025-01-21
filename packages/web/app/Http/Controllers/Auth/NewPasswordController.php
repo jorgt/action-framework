@@ -4,66 +4,114 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Auth\Events\PasswordReset;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
-use Inertia\Response;
+use App\Models\User;
+use App\Jobs\Auth\SendPasswordResetSuccessNotification;
 
 class NewPasswordController extends Controller
 {
-    /**
-     * Display the password reset view.
-     */
-    public function create(Request $request): Response
-    {
-        return Inertia::render('Auth/ResetPassword', [
-            'email' => $request->email,
-            'token' => $request->route('token'),
-        ]);
+  public function create(Request $request)
+  {
+    try {
+      Log::info('Password reset page accessed', [
+        'has_token' => !empty($request->token),
+        'has_email' => !empty($request->email),
+        'tenant_id' => tenant()->id,
+        'ip' => $request->ip(),
+      ]);
+
+      return Inertia::render('tenant/auth/reset-password', [
+        'token' => $request->token,
+        'email' => $request->email,
+      ]);
+    } catch (\Exception $e) {
+      Log::error('Failed to show password reset page', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'tenant_id' => tenant()->id,
+        'ip' => $request->ip(),
+      ]);
+      throw $e;
     }
+  }
 
-    /**
-     * Handle an incoming new password request.
-     *
-     * @throws \Illuminate\Validation\ValidationException
-     */
-    public function store(Request $request): RedirectResponse
-    {
-        $request->validate([
-            'token' => 'required',
-            'email' => 'required|email',
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+  public function store(Request $request)
+  {
+    try {
+      $start = microtime(true);
+
+      Log::info('Password reset attempt initiated', [
+        'email' => $request->email,
+        'has_token' => !empty($request->token),
+        'tenant_id' => tenant()->id,
+        'ip' => $request->ip(),
+      ]);
+
+      $request->validate([
+        'token' => ['required'],
+        'email' => ['required', 'email'],
+        'password' => ['required', 'confirmed', Rules\Password::defaults()],
+      ]);
+
+      $status = Password::reset($request->only('email', 'password', 'password_confirmation', 'token'), function ($user) use ($request, $start) {
+        Log::info('Resetting user password', [
+          'user_id' => $user->id,
+          'email' => $user->email,
+          'tenant_id' => tenant()->id,
         ]);
 
-        // Here we will attempt to reset the user's password. If it is successful we
-        // will update the password on an actual user model and persist it to the
-        // database. Otherwise we will parse the error and return the response.
-        $status = Password::reset(
-            $request->only('email', 'password', 'password_confirmation', 'token'),
-            function ($user) use ($request) {
-                $user->forceFill([
-                    'password' => Hash::make($request->password),
-                    'remember_token' => Str::random(60),
-                ])->save();
+        $user
+          ->forceFill([
+            'password' => Hash::make($request->password),
+            'remember_token' => Str::random(60),
+          ])
+          ->save();
 
-                event(new PasswordReset($user));
-            }
-        );
+        event(new PasswordReset($user));
+        SendPasswordResetSuccessNotification::dispatch($user);
 
-        // If the password was successfully reset, we will redirect the user back to
-        // the application's home authenticated view. If there is an error we can
-        // redirect them back to where they came from with their error message.
-        if ($status == Password::PASSWORD_RESET) {
-            return redirect()->route('login')->with('status', __($status));
-        }
-
-        throw ValidationException::withMessages([
-            'email' => [trans($status)],
+        Log::info('Password reset successful', [
+          'user_id' => $user->id,
+          'email' => $user->email,
+          'duration_ms' => (microtime(true) - $start) * 1000,
+          'tenant_id' => tenant()->id,
         ]);
+      });
+
+      if ($status == Password::PASSWORD_RESET) {
+        Log::info('Password reset completed', [
+          'email' => $request->email,
+          'status' => $status,
+          'duration_ms' => (microtime(true) - $start) * 1000,
+          'tenant_id' => tenant()->id,
+        ]);
+
+        return redirect()->route('login')->with('message', __($status));
+      }
+
+      Log::warning('Password reset failed', [
+        'email' => $request->email,
+        'status' => $status,
+        'tenant_id' => tenant()->id,
+        'ip' => $request->ip(),
+      ]);
+
+      return back()->withErrors(['email' => __($status)]);
+    } catch (\Exception $e) {
+      Log::error('Password reset process failed', [
+        'error' => $e->getMessage(),
+        'trace' => $e->getTraceAsString(),
+        'email' => $request->email ?? null,
+        'tenant_id' => tenant()->id,
+        'ip' => $request->ip(),
+      ]);
+      throw $e;
     }
+  }
 }

@@ -9,6 +9,8 @@ use App\Http\Controllers\Tenant\Api\LogController;
 use App\Http\Controllers\Tenant\Api\WebhookController;
 
 Route::prefix('api')->group(function () {
+  // Route::middleware(['auth'])->group(function () {
+
   // Entity routes
   Route::get('/entity/{id}', [EntityController::class, 'show']);
   Route::get('/entities', [EntityController::class, 'index']);
@@ -24,4 +26,5 @@ Route::prefix('api')->group(function () {
 
   // Webhook routes
   Route::apiResource('webhooks', WebhookController::class);
+  // });
 });

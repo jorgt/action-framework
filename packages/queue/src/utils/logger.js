@@ -1,13 +1,17 @@
-import winston from 'winston'
+import pino from 'pino'
+import pinoCaller from 'pino-caller'
+import path from 'path'
 
-const logger = winston.createLogger({
+const root = path.normalize(`${import.meta.url}../../..`)
+
+const baseLogger = pino({
 	level: process.env.LOG_LEVEL || 'info',
-	format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
-	transports: [
-		new winston.transports.Console({
-			format: winston.format.combine(winston.format.colorize(), winston.format.simple()),
-		}),
-	],
+	formatters: {
+		level: (label) => ({ level: label }),
+	},
+	timestamp: pino.stdTimeFunctions.isoTime,
 })
 
-export default logger
+const logger = pinoCaller(baseLogger, { relativeTo: root, stackAdjustment: 1 })
+
+export default baseLogger
