@@ -4,9 +4,11 @@ import logger from './utils/logger.js'
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import db from './db.js'
+import { setupSocketServer } from './lib/socketServer.js'
 
 let actionStateMachine
 let fastifyServer
+let socketServer
 
 const API_KEY = process.env.API_KEY
 if (!API_KEY) {
@@ -20,10 +22,14 @@ async function initializeApiServer(processor) {
 			logger: false,
 		})
 
-		// Add CORS support
 		await fastify.register(cors, {
 			origin: true,
 		})
+
+		// Setup Socket.IO
+		const server = fastify.server
+		const { io, pubClient, subClient } = await setupSocketServer(server)
+		socketServer = { io, pubClient, subClient }
 
 		// API key authentication
 		fastify.addHook('onRequest', async (request, reply) => {
@@ -44,6 +50,12 @@ async function initializeApiServer(processor) {
 					error: 'Missing required fields',
 					required: ['entity_id', 'entity_type', 'sequence_code'],
 				})
+			}
+
+			// Check if entity is locked
+			const isLocked = !await processor.acquireLock(entity_id)
+			if (isLocked) {
+				return reply.code(409).send({ error: 'Entity is currently being processed' })
 			}
 
 			try {
@@ -87,6 +99,8 @@ async function initializeApiServer(processor) {
 				})
 				return { success: true }
 			} catch (error) {
+				// Release lock on error
+				await processor.releaseLock(entity_id)
 				logger.error({ error: error.message }, 'INDEX|ENQUEUE: 1. Failed to enqueue job')
 				return reply.code(500).send({ error: 'INDEX|ENQUEUE: Failed to enqueue job' })
 			}
@@ -112,9 +126,9 @@ async function initializeApiServer(processor) {
 }
 
 // Initialize state machine
-async function initializeStateMachine() {
+async function initializeStateMachine(io) {
 	try {
-		actionStateMachine = new ActionStateMachine()
+		actionStateMachine = new ActionStateMachine(io)
 		logger.info('INDEX|INITIALIZE: Action state machine initialized')
 		return actionStateMachine
 	} catch (error) {
@@ -141,6 +155,12 @@ process.on('unhandledRejection', (reason, promise) => {
 async function shutdown(code = 0) {
 	logger.info('INDEX|SHUTDOWN: Initiating graceful shutdown...')
 	try {
+		if (socketServer) {
+			logger.info('INDEX|SHUTDOWN: Shutting down Socket.IO...')
+			await socketServer.pubClient.quit()
+			await socketServer.subClient.quit()
+			await socketServer.io.close()
+		}
 		if (fastifyServer) {
 			logger.info('INDEX|SHUTDOWN: Shutting down API server...')
 			await fastifyServer.close()
@@ -169,7 +189,12 @@ signals.forEach((signal) => {
 
 // Start everything
 logger.info('INDEX|START: Starting services...')
-initializeStateMachine()
+
+// Initialize Socket.IO first, then pass it to state machine
+fastifyServer = await Fastify({ logger: false })
+const { io } = await setupSocketServer(fastifyServer.server)
+
+initializeStateMachine(io)
 	.then(async (processor) => {
 		fastifyServer = await initializeApiServer(processor)
 		logger.info('INDEX|INITIALIZE: All services started successfully')

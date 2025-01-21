@@ -2,26 +2,32 @@ import { Worker } from 'bullmq'
 import logger from '../../utils/logger.js'
 import { actionHandlers } from '../actions/actionHandlers.js'
 
-export function setupWorker(queueName, connection, prefix, db) {
+export function setupWorker(queueName, connection, prefix, db, processor) {
 	const worker = new Worker(
 		queueName,
 		async (job) => {
 			try {
 				if (!job.data) {
-					throw new Error('WORKER|SETP: Job data is missing')
+					throw new Error('WORKER|SETUP: Job data is missing')
 				}
 
 				logger.info('WORKER|SETUP: 2. Processing action')
 
 				const handler = actionHandlers[job.data.action_type]
 				if (!handler) {
-					throw new Error(`WORKER|SETUP: 2. Unknown action type: ${action_type}`)
+					throw new Error(`WORKER|SETUP: 2. Unknown action type: ${job.data.action_type}`)
 				}
 
-				return await handler(db, job.data)
+				const result = await handler(db, job.data)
+				await processor.releaseLock(job.data.entity_id)
+				return result
+
 			} catch (error) {
+				if (processor && job.data && job.data.entity_id) {
+					await processor.releaseLock(job.data.entity_id)
+				}
 				logger.error({ error }, 'WORKER|SETUP: 2. Action execution failed')
-				throw { error }
+				throw error
 			}
 		},
 		{
