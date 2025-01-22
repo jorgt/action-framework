@@ -1,47 +1,85 @@
 import axios from 'axios';
 import notifications from '$lib/store/notifications';
 
-// Set up axios defaults
-axios.defaults.baseURL = window.location.origin;
-axios.defaults.withCredentials = true;
-
-const handleResponse = async (response, hideNotification = false) => {
-  if (response.status === 401) {
-    throw new Error('Unauthorized: Redirect to /login');
+const api = axios.create({
+  baseURL: window.location.origin,
+  withCredentials: true,
+  headers: {
+    'X-Requested-With': 'XMLHttpRequest',
+    'Accept': 'application/json'
   }
+});
 
-  if (response.status >= 400) {
-    if (!hideNotification) {
-      notifications.addNotification({
-        type: 'error',
-        title: response?.data?.message || response?.data?.error || response?.data || 'An error occurred',
-        body: response?.data?.description || 'Please try again',
-      });
+api.interceptors.request.use(config => {
+  const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+  if (token) {
+    config.headers['X-CSRF-TOKEN'] = token;
+  }
+  return config;
+}, error => null);
+
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 419) {
+      window.location.reload();
+      return null;
     }
-    throw new Error(`${response.status}: ${response?.data.message || response?.data?.error || response?.data || 'An error occurred'}`);
+    return null;
+  }
+);
+
+const handleResponse = (response, hideNotification = false) => {
+  const data = response?.data;
+
+  if (!hideNotification && response.config.method !== 'get' && data?.message) {
+    notifications.addNotification({
+      type: 'success',
+      title: data.message,
+      body: data.description || '',
+    });
   }
 
-  return response.data;
+  return data;
 };
 
 const handleError = (error, hideNotification = false) => {
-  if (error.response) {
-    return handleResponse(error.response, hideNotification);
+  if (!error.response) {
+    if (!hideNotification) {
+      notifications.addNotification({
+        type: 'error',
+        title: 'Network Error',
+        body: 'Please check your connection and try again',
+      });
+    }
+    return null;
   }
-  throw error;
+
+  const response = error.response;
+  const data = response.data;
+
+  if (response.status === 401) {
+    window.location.href = '/login';
+    return null;
+  }
+
+  if (!hideNotification) {
+    notifications.addNotification({
+      type: 'error',
+      title: data?.message || data?.error || 'An error occurred',
+      body: data?.description || 'Please try again',
+    });
+  }
+
+  return null;
 };
 
 const makeRequest = async (method, url, body = null, hideNotification = false) => {
   try {
-    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
-    const response = await axios({
+    const response = await api({
       method,
       url,
-      data: body,
-      headers: {
-        'X-CSRF-TOKEN': token,
-      },
+      data: body
     });
     return handleResponse(response, hideNotification);
   } catch (error) {

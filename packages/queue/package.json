@@ -11,6 +11,7 @@
 	},
 	"dependencies": {
 		"@fastify/cors": "^9.0.1",
+		"@socket.io/redis-adapter": "^8.2.1",
 		"bullmq": "^5.1.1",
 		"dotenv": "^16.3.1",
 		"fastify": "^4.27.0",
@@ -18,7 +19,9 @@
 		"knex": "^3.1.0",
 		"pg": "^8.13.1",
 		"pino": "^9.6.0",
-		"pino-caller": "^3.4.0"
+		"pino-caller": "^3.4.0",
+		"redis": "^4.6.7",
+		"socket.io": "^4.7.2"
 	},
 	"devDependencies": {
 		"nodemon": "^3.0.2"

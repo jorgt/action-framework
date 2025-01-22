@@ -42,6 +42,7 @@ async function initializeApiServer(processor) {
 
 		// Add job endpoint
 		fastify.post('/enqueue', async (request, reply) => {
+			console.log(request.body)
 			const { tenant_id, entity_id, entity_type, sequence_code } = request.body
 
 			if (!tenant_id || !entity_id || !entity_type || !sequence_code) {
@@ -53,7 +54,7 @@ async function initializeApiServer(processor) {
 			}
 
 			// Check if entity is locked
-			const isLocked = !await processor.acquireLock(entity_id)
+			const isLocked = !(await processor.acquireLock(entity_id))
 			if (isLocked) {
 				return reply.code(409).send({ error: 'Entity is currently being processed' })
 			}

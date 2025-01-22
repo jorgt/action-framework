@@ -6,11 +6,17 @@
 <script>
   import Button from '@/lib/components/Button.svelte';
   import Badge from '@/lib/components/Badge.svelte';
-  import { api } from '@/lib/api';
+  import socketInstance from '@/lib/socket';
   import { Plus } from 'lucide-svelte'
-  import { inertiaPost } from '@/lib/api';
+  import { get, post } from '@/lib/api/api';
+  import { onMount, onDestroy } from 'svelte';
 
 	let { entities, stats } = $props();
+  let unsubscribe;
+
+  console.log(entities);
+
+  let entityList = $state(entities.map(entity => ({ ...entity, lock: false })).sort((a, b) => a.name.localeCompare(b.name)));
 
   const formatDate = date => {
     return new Date(date).toLocaleDateString(window.navigator.language || 'en-US', {
@@ -19,15 +25,51 @@
       day: 'numeric',
     });
   };
-
   const startSequence = async (id, sequence_code) => {
     console.log('Starting sequence:', id, sequence_code);
     try {
-      await inertiaPost({url: `/api/entity/${id}/sequence`, data: { sequence_code }});
+      await post(`/api/entity/${id}/sequence`, { sequence_code });
     } catch(e) {
       console.warn(e);
     }
   }
+
+  async function updateEntityLock(entityId, status) {
+    if(status.locked) {
+      entityList = entityList.map(entity => {
+        if (entity.id === entityId) {
+          return { ...entity, lock: true };
+        }
+        return entity;
+      });
+    } else {
+      get(`/api/entity/${entityId}`).then(({ data }) => {
+        entityList = entityList.map(e => {
+          if (e.id === entityId) {
+            return { ...data, lock: false };
+          }
+          return e;
+        });
+      });
+    }
+  }
+
+  onMount(() => {
+    // When you need the socket:
+    const socket = socketInstance.connect()
+
+    // Subscribe to entity lock events:
+    unsubscribe = socket.subscribeToAllLocks((entityId, status) => {
+      updateEntityLock(entityId, status);
+    }) 
+  })
+
+  onDestroy(() => {
+    // Clean up the socket connection
+    unsubscribe();
+    socketInstance.disconnect()
+  })
+
 
   console.log('Dashboard component loaded');
   console.log('Props:', { entities, stats });
@@ -72,22 +114,25 @@
               </tr>
             </thead>
             <tbody>
-              {#each entities as { id, name, locked, entity_type, status_code, status_description, sequences }}
-                {@const status = locked ? 'Locked' : 'Unlocked'}
-                {@const statusColor = locked ? 'Error' : 'Success'}
+              {#each entityList as { id, name, lock, entity_type, status_code, status_description, sequences }}
+                {@const status = lock ? 'Locked' : 'Unlocked'}
+                {@const statusColor = lock ? 'Error' : 'Success'}
                 <tr class="hover:bg-accents-100">
-                  <td class={`border-l-4 ${locked ? 'border-l-accents-500' : 'border-l-accents-300'} border-b border-b-accents-200 py-2 pl-6 pr-8 sm:pl-8 lg:pl-8`}>
+                  <td class={`border-l-4 ${lock ? 'border-l-accents-500' : 'border-l-accents-300'} border-b border-b-accents-200 py-2 pl-6 pr-8 sm:pl-8 lg:pl-8`}>
                     <div class="font-semibold text-base">{name}</div>
                   </td>
                   <td class="whitespace-nowrap border-b border-accents-200 px-3 py-2">{entity_type}</td>
                   <td class="whitespace-nowrap border-b border-accents-200 px-3 py-2">{status_description} <span class="text-xs text-accents-600">{status_code}</span></td>
-                  <td class="whitespace-nowrap border-b border-accents-200 px-3 py-2 flex gap-3 items-center h-full">
+                  <td class="whitespace-nowrap border-b border-accents-200 px-3 py-2 flex gap-3 items-center h-full relative">
+                    {#if lock}
+                      <div class="z-10 absolute inset-0 bg-opacity-50 cursor-not-allowed"></div>
+                    {/if}
                     {#if sequences.length > 0}
                       {#each sequences as { sequence_description, sequence_code }}
-                        <Button size="small" on:click={() => startSequence(id, sequence_code)}>{sequence_description}</Button>
+                        <Button size="small" on:click={() => startSequence(id, sequence_code)} disabled={lock}>{sequence_description}</Button>
                       {/each}
                     {:else}
-                      <span class="text-sm text-accents-600">No actions available</span>
+                      <span class="py-0.5 text-sm text-accents-600">No actions available</span>
                     {/if}
                   </td>
                   <td class="whitespace-nowrap border-b border-accents-200 px-3 text-right py-2 text-sm text-accents-700"> <Badge type={statusColor}>{status}</Badge> </td>

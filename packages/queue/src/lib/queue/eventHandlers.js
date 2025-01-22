@@ -1,8 +1,5 @@
 import logger from '../../utils/logger.js'
 import db from '../../db.js'
-import { updateEntityStatusDirect } from '../database/entityQueries.js'
-import { buildEnhancedJobData } from './jobBuilder.js'
-import { getRootActions } from '../database/sequenceQueries.js'
 
 export function setupQueueEvents(queueEvents, queue) {
 	queueEvents.on('waiting', ({ jobId }) => {

@@ -5,6 +5,17 @@ module.exports = {
 	tabWidth: 2,
 	trailingComma: 'es5',
 	printWidth: 250,
+	trailingComma: 'all',
+	tabWidth: 2,
+	semi: true,
+	singleQuote: true,
+	printWidth: 999,
+	quoteProps: 'consistent',
+	bracketSpacing: true,
+	bracketSameLine: true,
+	arrowParens: 'avoid',
+	endOfLine: 'lf',
+	phpVersion: '8.1',
 	// Only process these specific paths and file types
 	overrides: [
 		{

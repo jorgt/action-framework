@@ -43,7 +43,9 @@ Route::middleware([
 
   Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('home');
-    Route::post('/api/entity/{id}/sequence', [EntityController::class, 'executeSequence']);
+    // Route::post('/api/entity/{id}/sequence', [EntityController::class, 'executeSequence']);
+    Route::post('/api/entity/{id}/sequence', [EntityController::class, 'executeSequenceJSON']);
+    Route::get('/api/entity/{id}', [EntityController::class, 'show']);
     // require base_path('routes/tenant/api.php');
   });
 });
