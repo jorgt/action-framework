@@ -1,14 +1,11 @@
 import 'dotenv/config'
-import ActionStateMachine from './stateMachine.js'
+import { initProcessor, getProcessor } from './stateMachine.js'
 import logger from './utils/logger.js'
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import db from './db.js'
-import { setupSocketServer } from './lib/socketServer.js'
-
-let actionStateMachine
+import SocketServer from './lib/socketServer.js'
 let fastifyServer
-let socketServer
 
 const API_KEY = process.env.API_KEY
 if (!API_KEY) {
@@ -27,9 +24,7 @@ async function initializeApiServer(processor) {
 		})
 
 		// Setup Socket.IO
-		const server = fastify.server
-		const { io, pubClient, subClient } = await setupSocketServer(server)
-		socketServer = { io, pubClient, subClient }
+		await SocketServer.getInstance().initialize(fastify.server)
 
 		// API key authentication
 		fastify.addHook('onRequest', async (request, reply) => {
@@ -67,6 +62,8 @@ async function initializeApiServer(processor) {
 						sequence_code,
 					})
 					.first()
+
+				console.log(jobData)
 
 				const keys = [
 					'entity_id',
@@ -126,23 +123,34 @@ async function initializeApiServer(processor) {
 	}
 }
 
-// Initialize state machine
-async function initializeStateMachine(io) {
-	try {
-		actionStateMachine = new ActionStateMachine(io)
-		logger.info('INDEX|INITIALIZE: Action state machine initialized')
-		return actionStateMachine
-	} catch (error) {
-		logger.error('INDEX|INITIALIZE: Failed to initialize action state machine', {
-			error: error.message,
-		})
-		throw error
-	}
-}
-
 // Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-	logger.error('INDEX|PROCESS: Uncaught Exception', { error: error.message })
+process.on('uncaughtException', async (error) => {
+	try {
+		const processor = getProcessor()
+		if (processor?.currentJob) {
+			await db.transaction(async (trx) => {
+				await db('action_entity_status')
+					.where({
+						entity_id: db.raw('?::uuid', [processor.currentJob.data.entity_id]),
+						entity_type: processor.currentJob.data.entity_type,
+					})
+					.update({
+						action_id: processor.currentJob.data.status_on_sequence_failure,
+						updated_at: db.fn.now(),
+					})
+				await updateLog(
+					trx,
+					processor.currentJob.data,
+					{ error: error.message },
+					processor.currentJob.data.status_on_sequence_failure
+				)
+			})
+			await processor.releaseLock(processor.currentJob.data.entity_id)
+		}
+	} catch (e) {
+		logger.error(e, 'INDEX|PROCESS: Error handling uncaught exception cleanup')
+	}
+	logger.error(error, 'INDEX|PROCESS: Uncaught Exception')
 	shutdown(1)
 })
 
@@ -156,19 +164,15 @@ process.on('unhandledRejection', (reason, promise) => {
 async function shutdown(code = 0) {
 	logger.info('INDEX|SHUTDOWN: Initiating graceful shutdown...')
 	try {
-		if (socketServer) {
-			logger.info('INDEX|SHUTDOWN: Shutting down Socket.IO...')
-			await socketServer.pubClient.quit()
-			await socketServer.subClient.quit()
-			await socketServer.io.close()
-		}
+		logger.info('INDEX|SHUTDOWN: Shutting down Socket.IO...')
+		await SocketServer.getInstance().shutdown()
 		if (fastifyServer) {
 			logger.info('INDEX|SHUTDOWN: Shutting down API server...')
 			await fastifyServer.close()
 		}
-		if (actionStateMachine) {
+		if (getProcessor()) {
 			logger.info('INDEX|SHUTDOWN: Shutting down state machine...')
-			await actionStateMachine.shutdown()
+			await getProcessor().shutdown()
 		}
 	} catch (error) {
 		logger.error('INDEX|SHUTDOWN: Error during shutdown', { error: error.message })
@@ -191,16 +195,14 @@ signals.forEach((signal) => {
 // Start everything
 logger.info('INDEX|START: Starting services...')
 
-// Initialize Socket.IO first, then pass it to state machine
-fastifyServer = await Fastify({ logger: false })
-const { io } = await setupSocketServer(fastifyServer.server)
-
-initializeStateMachine(io)
-	.then(async (processor) => {
-		fastifyServer = await initializeApiServer(processor)
-		logger.info('INDEX|INITIALIZE: All services started successfully')
-	})
-	.catch((error) => {
-		logger.error('INDEX|INITIALIZE: Failed to start', { error: error.message })
-		process.exit(1)
-	})
+// Initialize services
+try {
+	fastifyServer = await Fastify({ logger: false })
+	const processor = initProcessor()
+	fastifyServer = await initializeApiServer(processor)
+	await SocketServer.getInstance().initialize(fastifyServer.server)
+	logger.info('INDEX|INITIALIZE: All services started successfully')
+} catch (error) {
+	logger.error('INDEX|INITIALIZE: Failed to start', { error: error.message })
+	process.exit(1)
+}

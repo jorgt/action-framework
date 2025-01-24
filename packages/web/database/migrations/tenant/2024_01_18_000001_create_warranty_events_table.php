@@ -13,7 +13,7 @@ return new class extends Migration {
             $table->uuid('warranty_id');
             $table->string('event_type');
             $table->jsonb('event_data');
-            $table->timestamp('created_at');
+            $table->timestampTz('created_at');
 
             // Add a compound primary key
             $table->primary(['warranty_id', 'created_at']);

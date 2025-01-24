@@ -1,5 +1,5 @@
-import { router } from '@inertiajs/svelte'
-import notifications from '$lib/store/notifications'
+import { router } from '@inertiajs/svelte';
+import notifications from '$lib/store/notifications';
 
 function inertiaRequest({
   url,
@@ -15,27 +15,27 @@ function inertiaRequest({
       preserveState,
       preserveScroll,
       ...options,
-      onSuccess: (page) => {
-        const flash = page.props?.flash || {}
+      onSuccess: page => {
+        const flash = page.props?.flash || {};
         notifications.addNotification({
           title: flash.title || 'Success',
           body: flash.message || successMessage,
           type: flash.type || 'success',
-        })
-        options.onSuccess?.(page)
-        resolve(page)
+        });
+        options.onSuccess?.(page);
+        resolve(page);
       },
-      onError: (errors) => {
+      onError: errors => {
         notifications.addNotification({
           title: 'Error',
           body: errors.message || 'An error occurred',
           type: 'error',
-        })
-        options.onError?.(errors)
-        reject(errors)
+        });
+        options.onError?.(errors);
+        reject(errors);
       },
-    })
-  })
+    });
+  });
 }
 
 export async function inertiaPost({
@@ -54,7 +54,7 @@ export async function inertiaPost({
     options,
     preserveScroll,
     preserveState,
-  })
+  });
 }
 
 export async function inertiaPut({
@@ -73,7 +73,7 @@ export async function inertiaPut({
     options,
     preserveScroll,
     preserveState,
-  })
+  });
 }
 
 export async function inertiaDelete({
@@ -92,7 +92,7 @@ export async function inertiaDelete({
     options,
     preserveScroll,
     preserveState,
-  })
+  });
 }
 
 export async function inertiaPatch({
@@ -111,7 +111,7 @@ export async function inertiaPatch({
     options,
     preserveScroll,
     preserveState,
-  })
+  });
 }
 
 // Specialized versions for common operations
@@ -124,8 +124,8 @@ export async function inertiaUpload({
   preserveScroll = true,
   preserveState = true,
 }) {
-  const formData = new FormData()
-  formData.append(fieldName, file)
+  const formData = new FormData();
+  formData.append(fieldName, file);
   return inertiaPost({
     url,
     data: formData,
@@ -133,7 +133,7 @@ export async function inertiaUpload({
     options,
     preserveScroll,
     preserveState,
-  })
+  });
 }
 
 export async function inertiaDownload({
@@ -149,28 +149,28 @@ export async function inertiaDownload({
     method: 'get',
     options: {
       ...options,
-      onSuccess: (response) => {
+      onSuccess: response => {
         // Handle file download
-        const blob = new Blob([response.data])
-        const downloadUrl = window.URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = downloadUrl
-        link.download = filename
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        window.URL.revokeObjectURL(downloadUrl)
+        const blob = new Blob([response.data]);
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
 
-        options.onSuccess?.(response)
+        options.onSuccess?.(response);
       },
-      onError: (error) => {
+      onError: error => {
         notifications.addNotification({
           title: 'Error',
           body: errorMessage,
           type: 'error',
-        })
-        options.onError?.(error)
+        });
+        options.onError?.(error);
       },
     },
-  })
+  });
 }

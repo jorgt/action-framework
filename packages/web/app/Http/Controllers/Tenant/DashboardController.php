@@ -73,13 +73,37 @@ class DashboardController extends Controller
       return $entity;
     });
 
+    $logs = DB::select("
+      SELECT 
+        l.*,
+        e.name as entity_name,
+        a.name as action_name,
+        a.code as action_code,
+        s.description as status_description,
+        s.code as status_code,
+        to_char(l.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') as created_at
+      FROM action_log l
+      LEFT JOIN entities e ON e.id = l.entity_id
+      LEFT JOIN action_actions a ON a.id = l.action_id
+      LEFT JOIN action_statuses s ON s.id = l.status_id
+      ORDER BY l.created_at DESC
+      LIMIT 100
+    ");
+
+    $logs = array_map(function ($log) {
+      $log->payload = json_decode($log->payload, true);
+      $log->result = json_decode($log->result, true);
+      return $log;
+    }, $logs);
+
     return Inertia::render('tenant/dashboard', [
       'entities' => $entities,
       'stats' => [
         'active_jobs' => count($activeJobs),
         'waiting_jobs' => count($waitingJobs),
         'locked_entities' => $lockedEntityIds->count()
-      ]
+      ],
+      'logs' => $logs
     ]);
   }
 
@@ -91,16 +115,16 @@ class DashboardController extends Controller
       ->values();
 
     $entity = DB::select("
-            SELECT 
-                e.*,
-                es.entity_type,
-                s.code as status_code,
-                s.description as status_description
-            FROM entities e
-            JOIN action_entity_status es ON es.entity_id = e.id
-            JOIN action_statuses s ON s.id = es.action_id
-            WHERE e.id = ?
-        ", [$entityId])[0] ?? abort(404);
+        SELECT 
+            e.*,
+            es.entity_type,
+            s.code as status_code,
+            s.description as status_description
+        FROM entities e
+        JOIN action_entity_status es ON es.entity_id = e.id
+        JOIN action_statuses s ON s.id = es.action_id
+        WHERE e.id = ?
+    ", [$entityId])[0] ?? abort(404);
 
     return Inertia::render('Dashboard/Show', [
       'entity' => $entity,

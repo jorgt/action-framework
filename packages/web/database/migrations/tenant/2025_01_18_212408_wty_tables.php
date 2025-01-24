@@ -5,11 +5,10 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
 
-return new class extends Migration
-{
-    /**
-     * Run the migrations.
-     */
+return new class extends Migration {
+  /**
+   * Run the migrations.
+   */
   public function up()
   {
     // Ensure the UUID extension is enabled
@@ -21,7 +20,7 @@ return new class extends Migration
       $table->date('submission_date')->nullable();
       $table->decimal('total_amount', 15, 2)->default(0);
       $table->string('currency', 3);
-      $table->timestamps();
+      $table->timestampsTz();
     });
 
     // Warranty Claim Versions
@@ -29,11 +28,11 @@ return new class extends Migration
       $table->uuid('id')->primary()->default(DB::raw('uuid_generate_v4()')); // Primary key: version_id as UUID
       $table->uuid('warranty_claim_id'); // Foreign key to warranty_claims
       $table->unsignedInteger('version_number');
-      $table->timestamp('change_date')->useCurrent();
+      $table->timestampTz('change_date')->useCurrent();
       $table->string('user_id');
       $table->text('description')->nullable();
       $table->string('status');
-      $table->timestamps();
+      $table->timestampsTz();
 
       $table->foreign('warranty_claim_id')->references('id')->on('warranty_claims')->onDelete('cascade');
     });
@@ -48,7 +47,7 @@ return new class extends Migration
       $table->decimal('price', 15, 2)->default(0);
       $table->decimal('total_price', 15, 2)->default(0);
       $table->string('status');
-      $table->timestamps();
+      $table->timestampsTz();
 
       $table->foreign('warranty_claim_id')->references('id')->on('warranty_claims')->onDelete('cascade');
     });

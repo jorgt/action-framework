@@ -1,3 +1,4 @@
+// socket.js
 import { io } from 'socket.io-client'
 
 class SocketInstance {
@@ -7,46 +8,46 @@ class SocketInstance {
     }
 
     this.socket = null
-    this.lockSpace = null
     this.lockCallbacks = new Map()
     this.globalLockCallbacks = new Set()
+    this.logCallbacks = new Set()
     SocketInstance.instance = this
   }
 
   connect() {
     if (!this.socket) {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3010'
-      this.socket = io(apiUrl)
-      this.lockSpace = io(`${apiUrl}/locks`)
-
-      this.lockSpace.on('connect', () => {
-        console.debug('Lock namespace connected')
+      this.socket = io(apiUrl, {
+        autoConnect: true,
+        reconnection: true,
+        extraHeaders: {
+          'x-api-key': '7fdd999a-7cc3-46d8-91fb-c441bc69cba1',
+        },
       })
 
-      this.lockSpace.on('disconnect', () => {
-        console.debug('Lock namespace disconnected')
+      this.socket.on('connect', () => {
+        console.debug('Socket connected')
       })
 
-      // Single listener for all entity lock events
-      this.lockSpace.onAny((event, status) => {
-        if (event.startsWith('entity:')) {
-          const entityId = event.split(':')[1]
+      this.socket.on('disconnect', () => {
+        console.debug('Socket disconnected')
+      })
 
-          // Call entity-specific callbacks
-          const callbacks = this.lockCallbacks.get(entityId) || []
-          callbacks.forEach((cb) => cb(status))
+      this.socket.on('lock:status', ({ entityId, locked }) => {
+        const callbacks = this.lockCallbacks.get(entityId) || []
+        callbacks.forEach((cb) => cb({ locked }))
+        this.globalLockCallbacks.forEach((cb) => cb(entityId, { locked }))
+      })
 
-          // Call global callbacks
-          this.globalLockCallbacks.forEach((cb) => cb(entityId, status))
-        }
+      this.socket.on('system:log', (logData) => {
+        this.logCallbacks.forEach((cb) => cb(logData))
       })
     }
     return this
   }
 
-  // Subscribe to a specific entity
   subscribeToEntityLock(entityId, callback) {
-    if (!this.lockSpace) {
+    if (!this.socket) {
       throw new Error('Socket not initialized. Call connect() first')
     }
 
@@ -66,9 +67,8 @@ class SocketInstance {
     }
   }
 
-  // Subscribe to all entity lock events
   subscribeToAllLocks(callback) {
-    if (!this.lockSpace) {
+    if (!this.socket) {
       throw new Error('Socket not initialized. Call connect() first')
     }
 
@@ -76,17 +76,23 @@ class SocketInstance {
     return () => this.globalLockCallbacks.delete(callback)
   }
 
-  disconnect() {
-    if (this.lockSpace) {
-      this.lockSpace.disconnect()
-      this.lockSpace = null
+  subscribeToLogs(callback) {
+    if (!this.socket) {
+      throw new Error('Socket not initialized. Call connect() first')
     }
+
+    this.logCallbacks.add(callback)
+    return () => this.logCallbacks.delete(callback)
+  }
+
+  disconnect() {
     if (this.socket) {
       this.socket.disconnect()
       this.socket = null
     }
     this.lockCallbacks.clear()
     this.globalLockCallbacks.clear()
+    this.logCallbacks.clear()
   }
 }
 

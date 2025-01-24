@@ -6,17 +6,20 @@ const api = axios.create({
   withCredentials: true,
   headers: {
     'X-Requested-With': 'XMLHttpRequest',
-    'Accept': 'application/json'
-  }
+    'Accept': 'application/json',
+  },
 });
 
-api.interceptors.request.use(config => {
-  const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-  if (token) {
-    config.headers['X-CSRF-TOKEN'] = token;
-  }
-  return config;
-}, error => null);
+api.interceptors.request.use(
+  config => {
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (token) {
+      config.headers['X-CSRF-TOKEN'] = token;
+    }
+    return config;
+  },
+  error => null,
+);
 
 api.interceptors.response.use(
   response => response,
@@ -26,7 +29,7 @@ api.interceptors.response.use(
       return null;
     }
     return null;
-  }
+  },
 );
 
 const handleResponse = (response, hideNotification = false) => {
@@ -79,7 +82,7 @@ const makeRequest = async (method, url, body = null, hideNotification = false) =
     const response = await api({
       method,
       url,
-      data: body
+      data: body,
     });
     return handleResponse(response, hideNotification);
   } catch (error) {

@@ -1,5 +1,5 @@
 export async function getTestEntities(db) {
-  return await db`
+	return await db`
     select 
     t.id,
     t.name,
@@ -23,7 +23,7 @@ export async function getTestEntities(db) {
 }
 
 export async function getTestEntity(db, entity) {
-  const res = await db`
+	const res = await db`
       select 
       t.id,
       t.name,
@@ -46,5 +46,5 @@ export async function getTestEntity(db, entity) {
     order by t.name asc
   `;
 
-  return res[0];
+	return res[0];
 }

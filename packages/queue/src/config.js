@@ -3,12 +3,12 @@ import 'dotenv/config'
 export default {
 	redis: {
 		host: process.env.REDIS_HOST || 'localhost',
-		port: parseInt(process.env.REDIS_PORT || '6379'),
+		port: parseInt(process.env.REDIS_PORT || '16379'),
 		password: process.env.REDIS_PASSWORD,
 	},
 	queues: {
-		warranty: 'warranty-state-machine',
-		dlq: 'warranty-state-machine-dlq',
+		warranty: 'action-machine',
+		dlq: 'action-machine-dlq',
 	},
 	states: {
 		SUBMITTED: 'SUBMITTED',

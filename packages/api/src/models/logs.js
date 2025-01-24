@@ -1,5 +1,5 @@
 export async function getLogs(db) {
-  return await db`select 
+	return await db`select 
     a.id, a.action_id, a.created_at, 
     b.description as action_description,
     b.code as action_code, 

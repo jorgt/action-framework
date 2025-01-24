@@ -114,63 +114,6 @@ class EntityController extends Controller
     ]);
   }
 
-  // /**
-  //  * Execute a sequence on an entity
-  //  */
-  // public function executeSequence(Request $request, string $id)
-  // {
-  //   $request->validate([
-  //     'sequence_code' => 'required|string|size:4'
-  //   ]);
-
-  //   try {
-  //     $entity = DB::selectOne("
-  //           SELECT e.*, es.entity_type, es.action_id
-  //           FROM entities e
-  //           JOIN action_entity_status es ON es.entity_id = e.id
-  //           WHERE e.id = ?
-  //       ", [$id]);
-
-  //     \Log::info('Entity: ' . json_encode($entity));
-
-  //     if (!$entity) {
-  //       return back()->with('error', 'Entity not found');
-  //     }
-
-  //     \Log::info('Entity: ' . json_encode($entity));
-
-  //     // Call the actions API to enqueue the job
-  //     $client = new \GuzzleHttp\Client();
-  //     try {
-  //       $response = $client->post(env('ACTIONS_API_URL') . '/enqueue', [
-  //         'headers' => [
-  //           'Content-Type' => 'application/json',
-  //           'x-api-key' => env('ACTIONS_API_KEY')
-  //         ],
-  //         'json' => [
-  //           'entity_id' => $id,
-  //           'entity_type' => $entity->entity_type,
-  //           'sequence_code' => $request->input('sequence_code'),
-  //           'tenant_id' => tenant()->id,
-  //         ]
-  //       ]);
-
-  //       if ($response->getStatusCode() === 200) {
-  //         return back()->with('success', 'Sequence execution started');
-  //       } else {
-  //         return back()->with('error', 'Failed to enqueue job');
-  //       }
-  //     } catch (\GuzzleHttp\Exception\ClientException $e) {
-  //       if ($e->getResponse()->getStatusCode() === 409) {
-  //         return back()->with('error', 'Entity already has a pending sequence execution');
-  //       }
-  //       throw $e;
-  //     }
-  //   } catch (\Exception $e) {
-  //     \Log::error($e->getMessage());
-  //     return back()->with('error', 'Internal Server Error');
-  //   }
-  // }
   public function executeSequenceJSON(Request $request, string $id): JsonResponse
   {
     $request->validate([

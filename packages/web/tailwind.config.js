@@ -1,6 +1,6 @@
-import defaultTheme from 'tailwindcss/defaultTheme'
-import forms from '@tailwindcss/forms'
-import typography from '@tailwindcss/typography'
+import defaultTheme from 'tailwindcss/defaultTheme';
+import forms from '@tailwindcss/forms';
+import typography from '@tailwindcss/typography';
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -16,7 +16,7 @@ export default {
       fontFamily: {
         sans: ['Ubuntu', ...defaultTheme.fontFamily.sans],
       },
-      typography: (theme) => ({
+      typography: theme => ({
         DEFAULT: {
           css: {
             '--tw-prose-body': theme('colors.accents-800'),
@@ -49,7 +49,7 @@ export default {
         '8xl': '1920px',
       },
       colors: {
-        hover: 'var(--hover)',
+        'hover': 'var(--hover)',
         'hover-1': 'var(--hover-1)',
         'hover-2': 'var(--hover-2)',
         'accents-50': 'var(--accents-50)',
@@ -75,12 +75,12 @@ export default {
         'main-800': 'var(--main-800)',
         'main-900': 'var(--main-900)',
         'main-950': 'var(--main-950)',
-        contrast: 'var(--contrast)',
+        'contrast': 'var(--contrast)',
         'contrast-highlight': 'var(--contrast-highlight)',
       },
       boxShadow: {
         'outline-2': '0 0 0 2px var(--accents-2)',
-        magical:
+        'magical':
           'rgba(0, 0, 0, 0.02) 0px 30px 30px, rgba(0, 0, 0, 0.03) 0px 0px 8px, rgba(0, 0, 0, 0.05) 0px 1px 0px',
       },
       lineHeight: {
@@ -93,4 +93,4 @@ export default {
   },
 
   plugins: [forms, typography],
-}
+};

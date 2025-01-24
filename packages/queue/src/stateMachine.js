@@ -2,19 +2,15 @@ import { Queue, QueueEvents } from 'bullmq'
 import IORedis from 'ioredis'
 import db from './db.js'
 import logger from './utils/logger.js'
-import {
-	setupQueueEvents,
-	setupWorker,
-} from './lib/index.js'
-import { emitLockStatus } from './lib/socketServer.js'
+import { setupQueueEvents, setupWorker } from './lib/index.js'
+import SocketServer from './lib/socketServer.js'
 
 const prefix = 'action-queue'
 const QUEUE_NAME = 'entities'
 const LOCK_PREFIX = 'entity_lock:'
 
 class ActionProcessor {
-	constructor(io) {
-		this.io = io
+	constructor() {
 		this.connection = new IORedis({ maxRetriesPerRequest: null })
 
 		this.queue = new Queue(QUEUE_NAME, {
@@ -37,9 +33,9 @@ class ActionProcessor {
 	async acquireLock(entityId) {
 		const lockKey = `${LOCK_PREFIX}${entityId}`
 		const acquired = await this.connection.set(lockKey, '1', 'NX', 'EX', 3600) // 1 hour lock
-		
+
 		if (acquired) {
-			emitLockStatus(this.io, entityId, true)
+			SocketServer.getInstance().emitLockStatus(entityId, true)
 			return true
 		}
 		return false
@@ -48,7 +44,7 @@ class ActionProcessor {
 	async releaseLock(entityId) {
 		const lockKey = `${LOCK_PREFIX}${entityId}`
 		await this.connection.del(lockKey)
-		emitLockStatus(this.io, entityId, false)
+		SocketServer.getInstance().emitLockStatus(entityId, false)
 	}
 
 	setupProcessor() {
@@ -66,6 +62,22 @@ class ActionProcessor {
 		await this.queue.close()
 		await this.connection.quit()
 	}
+}
+
+let instance = null
+
+export function getProcessor() {
+	if (!instance) {
+		throw new Error('ActionProcessor not initialized')
+	}
+	return instance
+}
+
+export function initProcessor() {
+	if (!instance) {
+		instance = new ActionProcessor()
+	}
+	return instance
 }
 
 export default ActionProcessor

@@ -25,7 +25,7 @@ return new class extends Migration {
       $table->boolean('userAction')->default(false);
       $table->text('description')->nullable();
       $table->jsonb('config')->default('{}');
-      $table->timestamps();
+      $table->timestampsTz();
     });
 
     // Create statuses table
@@ -33,7 +33,7 @@ return new class extends Migration {
       $table->uuid('id')->primary()->default(DB::raw('uuid_generate_v4()'));
       $table->string('code', 4)->unique();
       $table->text('description')->nullable();
-      $table->timestamps();
+      $table->timestampsTz();
     });
 
     // Create sequences table
@@ -43,7 +43,7 @@ return new class extends Migration {
       $table->text('description')->nullable();
       $table->uuid('status_on_sequence_success')->nullable();
       $table->uuid('status_on_sequence_failure')->nullable();
-      $table->timestamps();
+      $table->timestampsTz();
 
       $table->foreign('status_on_sequence_success')
         ->references('id')
@@ -61,7 +61,7 @@ return new class extends Migration {
       $table->uuid('sequence_id');
       $table->uuid('action_id');
       $table->uuid('parent_action_id')->nullable();
-      $table->timestamps();
+      $table->timestampsTz();
 
       $table->unique(['sequence_id', 'action_id']);
 
@@ -84,7 +84,7 @@ return new class extends Migration {
       $table->uuid('id')->primary()->default(DB::raw('uuid_generate_v4()'));
       $table->string('code', 4)->unique();
       $table->text('description')->nullable();
-      $table->timestamps();
+      $table->timestampsTz();
     });
 
     // Create action_matrix_sequences table
@@ -93,7 +93,7 @@ return new class extends Migration {
       $table->uuid('action_matrix_id');
       $table->uuid('status_id');
       $table->uuid('sequence_id');
-      $table->timestamps();
+      $table->timestampsTz();
 
       $table->unique(['action_matrix_id', 'status_id', 'sequence_id']);
 
@@ -115,7 +115,7 @@ return new class extends Migration {
     Schema::create('entities', function (Blueprint $table) {
       $table->uuid('id')->primary()->default(DB::raw('uuid_generate_v4()'));
       $table->text('name');
-      $table->timestamps();
+      $table->timestampsTz();
     });
 
     // Create entity_status table
@@ -124,7 +124,7 @@ return new class extends Migration {
       $table->uuid('entity_id');
       $table->string('entity_type', 10);
       $table->uuid('action_id');
-      $table->timestamps();
+      $table->timestampsTz();
 
       $table->unique(['entity_id', 'entity_type']);
 
@@ -139,7 +139,7 @@ return new class extends Migration {
       $table->uuid('id')->primary()->default(DB::raw('uuid_generate_v4()'));
       $table->string('entity_type', 10);
       $table->uuid('action_matrix_id');
-      $table->timestamps();
+      $table->timestampsTz();
 
       $table->unique(['entity_type', 'action_matrix_id']);
 
@@ -157,7 +157,7 @@ return new class extends Migration {
       $table->uuid('action_id');
       $table->jsonb('payload')->default('{}');
       $table->jsonb('result')->default('{}');
-      $table->timestamp('created_at')->useCurrent();
+      $table->timestampTz('created_at')->useCurrent();
 
       $table->foreign('action_id')
         ->references('id')
@@ -174,14 +174,14 @@ return new class extends Migration {
       $table->string('method'); // http_method enum
       $table->jsonb('fields')->default('[]'); // array of JSON objects
       $table->text('name');
-      $table->timestamps();
+      $table->timestampsTz();
     });
 
     // Create webhooks_log table
     Schema::create('action_webhooks_log', function (Blueprint $table) {
       $table->id(); // bigserial
       $table->uuid('hook_id');
-      $table->timestamp('created_at')->useCurrent();
+      $table->timestampTz('created_at')->useCurrent();
       $table->text('response')->nullable();
       $table->integer('status_code')->nullable();
 

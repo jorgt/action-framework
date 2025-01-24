@@ -1,5 +1,5 @@
 export async function getQueue(db) {
-  return await db`
+	return await db`
   select 
     q.id, 
     q.entity_id, 

@@ -19,13 +19,8 @@ export function setupWorker(queueName, connection, prefix, db, processor) {
 				}
 
 				const result = await handler(db, job.data)
-				await processor.releaseLock(job.data.entity_id)
 				return result
-
 			} catch (error) {
-				if (processor && job.data && job.data.entity_id) {
-					await processor.releaseLock(job.data.entity_id)
-				}
 				logger.error({ error }, 'WORKER|SETUP: 2. Action execution failed')
 				throw error
 			}
